@@ -8,6 +8,15 @@ You just need to add the thesaurus data onto the end of the parody perl script.
     $ cat parody posthes.dat > ~/bin/parody
     $ chmod a+x ~/bin/parody
 
+GETTING HELP
+============
+
+The perl script should come with its own usage and help built-in, try:
+
+    $ parody --help
+
+Failing this there is a precompiled man page [man.html](man.html) in the source.
+
 THESAURUS DATA
 ==============
 
