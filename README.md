@@ -2,6 +2,7 @@ INSTALL
 =======
 
 You just need to add the thesaurus data onto the end of the parody perl script.
+
     cat parody posthes.dat > ~/bin/parody
     chmod a+x ~/bin/parody
 
