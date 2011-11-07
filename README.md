@@ -15,7 +15,7 @@ The perl script should come with its own usage and help built-in, try:
 
     $ parody --help
 
-Failing this there is a precompiled man page [man.html](man.html) in the source.
+Failing this there is a precompiled man page [man.html](parody/man.html) in the source.
 
 THESAURUS DATA
 ==============
