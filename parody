@@ -1,0 +1,791 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+parody v1.2.9 - Parody some source text with a first order Markov chain and synonym mutation from a thesaurus.
+
+=head1 SYNOPSIS
+
+parody [options] <file|url>...
+
+ Basic Options:
+	-h --help		Get full man page output
+	-v --verbose		Verbose output with details of mutations
+	-d --debug		Debug output
+	-c --colour		Add colour highlights to word mutations
+	   --html		Output <span> tag colours instead of terminal colours, use with --colour
+	-i --input-model        Load a stored model from file
+	-o --output-model       Store a model to disk for later use with -i
+	-n --dont-generate	Don't generate output from model
+	-s --start		Word to start generating from
+	-l --length		Number of words to output
+	-? --punctuation	Include punctuation as model symbols
+	-u --passthru		Just pass the text straight through applying text replacement operators
+	-g --graph-viz		Print out a graph viz file of the model
+
+ Advanced Options:
+	-m --mutation		Probability of mutation from thesaurus
+	-r --replace		Replace a set of match words with replacements
+	-e --emotion		Alter the emotional content of the text
+	-p --parts-of-speech	Mutate only on words forming parts of speech
+	--prior-model		Use a stored model as a prior for creating a new chain from input sources
+	--prior-weight		How much should the old model be used compared to the new
+
+=head1 DESCRIPTION
+
+This program can be used to produce output text that is statistically similar to its input, whilst
+introducing novelty in the form of per word mutations from a thesaurus.
+
+A B<Markov chain>, named for I<Andrey Markov>, is a mathematical system that undergoes transitions from
+one state to another, like following the links in a chain. In this program states and words from text
+are synonymous. From a given word we calculate the expectation of another word following in the text,
+and nothing more. This is termed the B<Markov property> of the chain and refers to the memoryless property
+of a stochastic process. To generate the parody output we start at a word and select a new word
+stochastically, based on the expectation of each possible word that followed in the original text.
+We then move (transition) to this selected word, discarding any information about what we have
+previously generated. This walk of the chain continues until the length of output specified is reached.
+
+Mutation of output words is acheived with the use of the public domain Moby Thesaurus, and ANEW
+emotional content data (academic use only).
+These data allow for mutation of a word based on part-of-speech specific (Noun, Verb etc.) synonyms
+and pyschological valence score (positive or negative emotion).
+
+You may wish to use this program to create novel text from known inputs for various reasons. The
+following are some historic uses of Markov chain text parody:
+
+In 1984 I<Mark V Shaney> a fake Usenet user introduced postings generated from a Markov chain
+technique. This script could be used to the same ends especially for short forced grammar situations
+like Twitter posts.
+
+	Example posts: http://en.wikipedia.org/wiki/Mark_V_Shaney
+
+The well received aleatoric poems B<Postmortem Series> and B<Accuracy> by the American poet I<Jeffrey
+Harrison> were Markov chain inspired. This script is especially suited to this kind of inspired verse
+work, as words of a given stanza can be mutated and have the emotional content transformed. For example
+transforming the works of Edgar Allan Poe to have a positive outlook is an especially succesful use case.
+
+	Markov poem examples: http://www.moriapoetry.com/harrison.html
+	Harrison's Bio: http://home.comcast.net/~jeffrey.harrison/bio.htm
+
+For examples of how to use this program with your own input, please see the I<EXAMPLES> section.
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-h, --help>
+
+Print this brief help message from the command line.
+
+=item B<-d, --debug>
+
+Print debug output showing how the text is being mutated with thesaurus usage.
+
+=item B<-v, --verbose>
+
+Verbose output showing how the text is changing.
+
+=item B<-c, --colour>
+
+Use colour to highlight text substitutions being made. Vanilla thesaurus substitution is in blue, emotional content substitution is in green for positive change and red for negative change.
+
+=item B<--html>
+
+Use HTML <span> tags instead of ANSI terminal codes to colour the text output, only useful with the --colour option.
+
+=item B<-i, --input-model>=I<file>
+
+Pass in a previously stored Markov Chain model.
+
+=item B<-o, --output-model>=I<file>
+
+Pass in a location where you would like the Markov Chain for this session stored.
+
+=item B<-n, --dont-generate>
+
+Don't generate output, useful if you just wish to batch merge/create models.
+
+=item B<-s, --start>=I<word>
+
+Specify a word to start generating text from. The default action is to pick a word at random from the source text.
+
+=item B<-l, --length>=I<magnitude>
+
+Define how many output words should be generated from the Markov chain.
+
+=item B<-?, --punctuation>
+
+Force punctuation to be model symbols regardless of white space. This is sometimes useful for improving white space in parody of verse.
+
+=item B<-u, --passthru>
+
+If you wish to just change the emotional content of the source text this flag will allow you to do that.
+
+=item B<-g, --graph-viz>
+
+Output to I<STDOUT> a GraphViz DOT file of the Markov Chain this can then be used to visualize the model.
+
+=item B<-m, --mutation>=I<probability>
+
+Allow per word mutation from the thesaurus with a given expectation 0.0 < probability <= 1.0. If you asked for an output length of 100 words and specified a probability of 0.2 then 20 words are likely to have been mutated.
+
+=item B<-r, --replace> I<match1>=I<replacement1> I<match2>=I<replacement2> ...
+
+Define your own replacement map, for example: --replace I<he=she> I<his=hers> I<him=her>
+
+=item B<-e, --emotion>=I<positive|negative>
+
+Force mutations with a given emotional feeling. Current options include I<positive> or I<negative> emotional content.
+
+=item B<-p, --parts-of-speech>=I<list of parts>
+
+Declare which types of words should be substituted in thesaurus mutation. By default only Nouns, Noun Phraes and Adjectives will be swapped.
+The default substitutions would be specified with: B<--parts-of-speech>=I<NhA>
+
+=over 8
+
+=item I<Noun>						B<N>
+
+=item Plural					B<p>
+
+=item I<Noun Phrase>				B<h>
+
+=item Verb (usu participle)		B<V>
+
+=item Verb (transitive)			B<t>
+
+=item Verb (intransitive)			B<i>
+
+=item I<Adjective>					B<A>
+
+=item Adverb					B<v>
+
+=item Conjunction				B<C>
+
+=item Preposition				B<P>
+
+=item Interjection				B<!>
+
+=item Pronoun					B<r>
+
+=item Definite Article			B<D>
+
+=item Indefinite Article			B<I>
+
+=item Nominative				B<o>
+
+=back
+
+=item
+
+=item B<--prior-model>=I<file>
+
+Specify a stored model as a prior for creating a merged model from input source text. For example you might make models of various genres od text and then use this to weight input text towards those genres.
+
+=item B<--prior-weight>=I<weight>
+
+The weighting between 0.0 and 1.0 (default 0.5) for how strongly the old model should affect the new. Old evidence will be included regardless. If a word existed in the old model but not in the new these words will be included in the new model.
+
+I<Formal description:>
+  P(prior-model)*(weight) + P(input-model)*(1-weight) = P(output-model)
+
+=back
+
+=head1 EXAMPLES
+
+Create some fake quotes from an online list:
+
+	parody -c -l 200 -m 0.2 http://www.cs.ubc.ca/~bsd/quotes.txt
+
+Take some depressing text and make a happy parody:
+
+	parody -c -l 200 -m 0.5 --emotion=positive edgar_allan_poe/the_raven.txt
+
+To do the same as above but instead pass through the original poem and make it more negative:
+
+	parody -c --passthru --emotion=negative edgar_allan_poe/the_raven.txt
+
+Create some interesting instructions with unusual verb use:
+
+	parody --start=The --length=1000 --mutation=0.01 --replace spanner=spork --parts-of-speech=Vti build_instructions.txt
+
+Create two models and merge them with bias to the second source:
+
+	parody -n --output-model source1.model source1.txt
+	parody -n --output-model source2.model source2.txt
+	parody -n --output-model merged.model --prior-model source1.model --prior-weight 0.3 --input-model source2.model
+
+Visualize the model as a directed graph in SVG format with GraphViz:
+
+	parody --graph-viz --input-model text.model | dot -Tsvg -o text.svg /dev/stdin
+
+Dealing with PDFs or Postscript and piped data:
+
+	Use ps2ascii from Ghostscript Tools suite:
+		ps2ascii input.pdf | parody -l 200 /dev/stdin
+
+Produce spoken esoteric sagely advice from the Tao Te Ching:
+
+	GNU/Linux use the festival project:
+		parody -s sage -l 10 http://www.gutenberg.org/files/216/old/taote10.txt | festival --tts /dev/stdin
+
+	Mac OSX use the built in say command:
+		parody -s sage -l 10 http://www.gutenberg.org/files/216/old/taote10.txt | say
+
+=head1 AUTHOR
+
+B<Matt Oates> - I<mattoates@gmail.com>
+
+=head1 CONTRIBUTORS
+
+B<Ward, G.> (2002). I<Moby thesaurus II> http://icon.shef.ac.uk/Moby
+
+B<Bradley, M.M., & Lang, P.J.> (1999). I<Affective norms for English words (ANEW): Stimuli, instruction manual and affective ratings.> Technical report C-1, Gainesville, FL. The Center for Research in Psychophysiology, University of Florida.
+
+B<Thomas Gorochowski> (2011) tested HTTP get with 404 and blank files.
+
+B<Stephen Paulger> (2011) typo checking.
+
+=head1 LICENSE AND COPYRIGHT
+
+B<Copyright 2011 Matt Oates>
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+=head1 TODO
+
+=over 8
+
+=item Handle closures and whitespace around quotes and braces correctly.
+
+=item Use generative grammar rules to constrain model output... this will break grammatical style
+present in the model.
+
+=back
+
+=head1 FUNCTIONS DEFINED
+
+=over 4
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long;
+use Pod::Usage;
+use Term::ANSIColor;
+use LWP::Simple;
+use Data::Serializer;
+use Data::Serializer::Data::Dumper;
+use Data::Dumper;
+
+my $VERSION = 1.2.9;
+
+my @words;
+my $dictionary = {};
+my %synonyms;
+my $prior;
+my $current_word;
+my $output = '';
+
+my $colour;
+my $html;
+my $verbose;
+my $debug;
+my $help;
+
+my $dont_generate;
+my $start_word;
+my $length = 200;
+my $punct;
+my $passthru;
+my $graphviz;
+my $thesprob = 0.0;
+my $partsos = 'ANh';
+my %replace;
+my $emotion;
+
+my $input_model;
+my $output_model;
+
+my $prior_model;
+my $prior_weight;
+
+my $serializer = Data::Serializer->new(
+                         serializer => 'Data::Dumper',
+                         portable   => '1',
+                         compress   => '1',
+                   serializer_token => '1',
+                           options  => {},
+                        );
+
+binmode(STDIN, ":utf8");
+binmode(STDOUT, ":utf8");
+binmode(STDERR, ":utf8");
+
+#Set command line flags and parameters.
+GetOptions("colour|c!" => \$colour,
+           "html!" => \$html,
+           "verbose|v!"  => \$verbose,
+           "debug|d!"  => \$debug,
+           "help|h!" => \$help,
+           "dont-generate|n!" => \$dont_generate,
+           "start|s=s" => \$start_word,
+           "length|l=i" => \$length,
+           "punctuation|?!" => \$punct,
+           "passthru|u!" => \$passthru,
+           "graph-viz|g!" => \$graphviz,
+           "mutation|m=f" => \$thesprob,
+           "replace|r=s%" => \%replace,
+           "emotion|e=s" => \$emotion,
+           "parts-of-speech|p=s" => \$partsos,
+           "output-model|o=s" => \$output_model,
+           "input-model|i=s" => \$input_model,
+           "prior-model=s" => \$prior_model,
+           "prior-weight=f" => \$prior_weight,
+        ) or die "Fatal Error: Problem parsing command-line ".$!;
+
+if ($input_model and $passthru) {
+	pod2usage(-msg  => "You can't use a model as input whilst not using models for output.", -exitstatus => 2, -verbose => 0, -output => \*STDERR);
+}
+
+unless (not $emotion or $emotion =~ m/^(pos|neg)/i) {
+	pod2usage(-msg  => "Unrecognised emotion parameter. Should be positive or negative!", -exitstatus => 2, -verbose => 0, -output => \*STDERR);
+}
+
+if ($prior_weight and not $prior_model) {
+	pod2usage(-msg  => "Prior weight option only meaningful with --prior-model <model_file>", -exitstatus => 2, -verbose => 0, -output => \*STDERR);
+}
+
+$prior_weight = 0.5 if not $prior_weight and $prior_model;
+
+#Debug implies verbose
+$verbose = $debug unless $verbose;
+
+#Print out some help if it was asked for or if no arguments were given.
+pod2usage(-exitstatus => 0, -verbose => 3) if $help;
+pod2usage(-msg  => "No input files specified.", -exitstatus => 2, -verbose => 0, -output => \*STDERR) unless @ARGV or $input_model;
+
+print STDERR "Use of --html without --colour has no effect.\n" if $html and not $colour;
+
+sub outputcolor ($) {
+	return '' unless $colour;
+	my $palette = shift;
+	return "<span style=\"color:$palette\">" if $html;
+	return color $palette;
+}
+
+sub resetcolor () {
+	return '' unless $colour;
+	return "</span>" if $html;
+	return color 'reset';
+}
+
+=item I<trailingmc> - Build a trailing word Markov Chain of a set of files
+=cut
+sub trailingmc (@) {
+	my @files = @_;
+	my @input;
+	my $model = {};
+
+	#Gather words from all the files
+	foreach my $file (@files) {
+		#Get a text file from a URL
+        	if ($file =~ m/^http:\/\/.*\.txt$/) {
+			my $gets = get $file or die "Couldn't get HTTP location $file.";
+                	push @input, split /[\b\s]/, $gets;
+        	}
+		#Otherwsie open as usual
+        	else {
+        		my $fh;
+        		open $fh, '<', $file or die "Couldn't open input $file $!";
+        		#binmode($fh, ":utf8");
+        		#Get all words from the files
+        		while (<$fh>) {
+        			my $line = $_;
+        			my $eol = $/;
+        			$line =~ s/([\.:;,?!])/ $1 /g if $punct;
+        			if ($line =~ m/$eol$/) {
+        				chomp $line;
+                		push @input, grep {$_ ne ''} split /[\b\s]/, $line;
+                		push @input, $eol;
+                	} else {push @input, grep {$_ ne ''} split /[\b\s]/, $line;}
+        		}
+        		close $fh or die "Couldn't close $file $!";
+        	}
+	}
+	die "Input was empty..." unless @input;
+	#Construct a dictionary of all words and their trailing words + frequencies
+	foreach my $i (0..($#input-1)) {
+        	$model->{$input[$i]}{$input[$i+1]}++;
+	}
+
+	#Convert frequency to trailing probability
+	foreach my $word (keys %$model) {
+        	my $total = 0;
+        	$total += $_ for values %{$model->{$word}};
+        	$model->{$word}{$_} /= $total for keys %{$model->{$word}};
+	}
+
+	#Free up some RAM incase going out of scope doesn't kill it
+	undef @input;
+	return $model;
+}
+
+=item I<storemc> - Store a Markov Chain Model to file
+=cut
+sub storemc ($$) {
+	my ($model, $file) = @_;
+        my $out_mod;
+
+        open $out_mod, '>', $file or die "Can't open output model file $file for writing. $!";
+        print $out_mod $serializer->serialize($model);
+        close $out_mod or die "Can't close output model file $file. $!";
+}
+
+=item I<loadmc> - Load stored Markov Chain Model from file
+=cut
+sub loadmc ($) {
+	my ($file) = @_;
+	my $in_mod;
+	my $model;
+
+	if (-e $file) {
+        	open $in_mod, '<', $file or die "Can't open input model file $file for reading. $!";
+        	$model = $serializer->deserialize(<$in_mod>);
+        	close $in_mod or die "Can't close input model file $file. $!";
+        } else { die "Could not find $file! $!"; }
+
+	return $model;
+}
+
+=item I<loadthes> - Load a thesaurus from file
+=cut
+sub loadthes ($$) {
+	my ($file,$model) = @_;
+	my $fh;
+	my $thesaurus = {};
+	if (ref $file eq 'GLOB') {$fh = $file}
+	else {open $fh, '<', $file or die "Couldn't open thesaurus file $file. $!";}
+
+	#Add a structure for every entry in the thesaurus
+	while (my $record = <$fh>) {
+		chomp($record);
+		#Get the trunk word for this record
+		my ($word,$emotion,$parts);
+		($word, $record) = split /\t/, $record, 2;
+		($word, $emotion, $parts) = split /_/, $word;
+
+		#Only add to the thesaurus if this is a word we will ever lookup
+		next unless exists $model->{$word};
+
+		#Make sure we are memory efficient for large thesauri
+		$emotion = ($emotion)?[split /,/, $emotion]:undef;
+		$parts = ($parts)?$parts:undef;
+		$thesaurus->{$word} = [$parts, $emotion, {}];
+
+		#Now create the structure for this whole record
+		my @synonyms = split /\t/, $record;
+		while(my $synonym = shift @synonyms) {
+			my ($syn, $emo, $pos) = split /_/, $synonym;
+			$emo = ($emo)?[split /,/, $emo]:undef;
+			$pos = ($pos)?$pos:undef;
+			my $params = ($pos or $emo)?[$pos, $emo]:undef;
+			$thesaurus->{$word}[2]{$syn} = $params;
+		}
+	}
+
+	close $fh;
+	return $thesaurus;
+}
+
+=item I<randmut> - Random mutation from thesaurus
+=cut
+sub randmut ($$) {
+	my ($word, $thesaurus) = @_;
+	my @syns = grep {defined $thesaurus->{$word}[2]{$_}[0] and $thesaurus->{$word}[2]{$_}[0] =~ m/[$thesaurus->{$word}[0]]+/} keys %{$thesaurus->{$word}[2]};
+	my $mut = (@syns)?$syns[int rand $#syns]:$word;
+	if ($word ne $mut) {
+	$output .= outputcolor('cyan');
+	$output .= "[$word => " if ($verbose);
+	$output .= $mut;
+	$output .= "]" if $verbose;
+	$output .= resetcolor();
+	} else {$output .= $word;}
+}
+
+=item I<emomut> - Emotive mutation from thesaurus if possible otherwise random
+=cut
+sub emomut ($$) {
+	my ($word, $thesaurus) = @_;
+	my ($col, $threshold, $sort) = ($emotion =~ m/pos/i)?('green',sub{ defined $_[0] and $_[0] > 0.0 },sub{ $_[1] <=> $_[0]; }):('red',sub{ defined $_[0] and $_[0] < 0.0 },sub{ $_[0] <=> $_[1]; });
+	#print Dumper($thesaurus);
+	my @emotive = sort {$sort->($thesaurus->{$word}[2]{$a}[1][0],$thesaurus->{$word}[2]{$b}[1][0])} grep {defined $thesaurus->{$word}[2]{$_}[1][0] and defined $thesaurus->{$word}[2]{$_}[0] and $threshold->($thesaurus->{$word}[2]{$_}[1][0]) and $thesaurus->{$word}[2]{$_}[0] =~ m/[$thesaurus->{$word}[0]]+/} keys %{$thesaurus->{$word}[2]};
+
+	randmut($word, $thesaurus) and return unless @emotive;
+
+	my $emoword;
+	if (scalar @emotive == 1) {
+		$emoword = shift @emotive;
+	#Mutate randomly but proportional to the emotional impact
+	} else {
+		my $emotion_to_find;
+		foreach (@emotive) {$emotion_to_find += $thesaurus->{$word}[2]{$_}[1][0];}
+		$emotion_to_find *= rand;
+		$emotion_to_find = abs($emotion_to_find);
+		($emoword) = grep {$emotion_to_find -= abs($thesaurus->{$word}[2]{$_}[1][0]) and $emotion_to_find <= 0.00001} @emotive;
+	}
+
+	$output .= outputcolor($col);
+	$output .= "[$word => " if ($verbose);
+	$output .= $emoword;
+	$output .= " $thesaurus->{$word}[2]{$emoword}[1][0]]" if $verbose;
+	$output .= resetcolor();
+}
+
+=item I<passthru> - Pass the text through only performing word replacement
+=cut
+sub passthru {
+	my @files = @_;
+	my @input;
+	#Gather words from all the files
+	foreach my $file (@files) {
+		#Get a text file from a URL
+        	if ($file =~ m/^http:\/\/.*\.txt$/) {
+                	push @input, split /\b/, get $file;
+        	}
+		#Otherwsie open as usual
+        	else {
+        		my $fh;
+        		open $fh, '<', $file or die "Couldn't open input $file $!";
+        		#binmode($fh, ":utf8");
+        		#Get all words from the files
+        		while (<$fh>) {
+					push @input, split /\b/, $_;
+        		}
+        		close $fh or die "Couldn't close $file $!";
+        	}
+	}
+
+	@$dictionary{@input} = ();
+	%synonyms = %{loadthes(\*DATA,$dictionary)};
+
+	foreach my $word (@input) {
+		#Perform the required replacements if any
+		if (exists $replace{$word}) {
+			$output .= outputcolor('yellow');
+			$output .= "[$word => " if ($verbose);
+			$output .= $replace{$word};
+			$output .= "]" if $verbose;
+			$output .= resetcolor();
+		}
+		#With a probability of $thesprob print a mutation of the current word from the thesaurus
+		elsif (exists $synonyms{$word} and defined $synonyms{$word}[0] and $synonyms{$word}[0] =~ m/[$partsos]+/ and rand() < $thesprob) {
+			if ($emotion) {
+				emomut $word, \%synonyms;
+			} else {
+				randmut $word, \%synonyms;
+			}
+		}
+		#Otherwise just print the vanilla word from the model
+		else {
+			$output .= $word;
+		}
+	}
+
+}
+
+sub graphviz {
+	my ($model, $thesaurus) = @_;
+
+#node [shape = doublecircle]; LR_0 LR_3 LR_4 LR_8;
+print <<EOF
+digraph "Markov Chain States" {
+	graphy [ rankdir = "LR",
+		 url = "http://en.wiktionary.org/wiki/",
+		 label = "Markov Chain States" ];
+	node [ shape = circle, fontsize = 9 ];
+EOF
+;
+
+foreach my $word (keys %$model) {
+	my $oword = $word;
+	$oword =~ s/"/\\"/g;
+        $oword =~ s/\s+/\\s/g;
+	my $emo = '';
+	if ($thesaurus->{$word}[1][0]) {
+		if ($thesaurus->{$word}[1][0] < -0.2) {
+			$emo = ', bgcolor="red"';
+		} elsif ($thesaurus->{$word}[1][0] > 0.2) {
+			$emo = ', bgcolor="green"';
+		} else {
+			$emo = ', bgcolor="orange"';
+		}
+	}
+	my @trailingwords = keys %{$model->{$word}};
+	if (scalar @trailingwords >= 5) {
+		print "\t\"$oword\" [ shape = doublecircle $emo];\n";
+	} elsif (scalar @trailingwords == 1) {
+		print "\t\"$oword\" [ shape = box $emo];\n";
+	}
+	foreach my $trailing (@trailingwords) {
+		$model->{$word}{$trailing} = 0 unless $model->{$word}{$trailing};
+		my $otrail = $trailing;
+		$otrail =~ s/"/\\"/g;
+		$otrail =~ s/\s+/\\s/g;
+		my $color = ($word eq $trailing)?'red':'black';
+		print "\t\"$oword\" -> \"$otrail\" [ label = \"$model->{$word}{$trailing}\", color=\"$color\" ];\n";
+	}
+}
+
+print "}\n";
+
+}
+
+=back
+=cut
+
+#If we were asked to passthru the text do just that and exit
+if ($passthru) {
+	passthru @ARGV;
+	print $output;
+	exit;
+}
+
+#Load input model or use all the files specified to create a new model
+if ($input_model) {
+	#my $in_mod = new IO::Uncompress::Bunzip2 $input_model or die "bunzip2 failed\n";
+        #$dictionary = retrieve_fd $in_mod;
+	#close $in_mod;
+	$dictionary = loadmc($input_model);
+} else {
+	$dictionary = trailingmc @ARGV;
+}
+
+#For efficiency keep hold of a list of the keys, this saves using temporary list constructs later
+@words = keys %$dictionary;
+
+#If a prior model was defined load and merge it with the current model
+if ($prior_model) {
+	print STDERR "Number of words before merge = ".scalar @words."\n" if $debug;
+	$prior = loadmc($prior_model);
+
+	my @words_prior = grep(!defined $dictionary->{$_}, keys %$prior);
+
+	#Normalise probabilities and merge based on weight
+	my $weight = 1.0 - $prior_weight;
+	foreach my $word (keys %$dictionary) {
+		if (defined $prior->{$word}) {
+			my @trailing_words = keys %{$dictionary->{$word}};
+			my @trailing_prior = grep(!defined $dictionary->{$_}, keys %{$prior->{$word}});
+
+			#For all the trailing words defined in the input source model
+			#Normalise the probability and add the contribution from the prior
+			foreach my $trailing (@trailing_words) {
+				$dictionary->{$word}{$trailing} *= $weight;
+				if (exists $prior->{$word}{$trailing}) {
+					$dictionary->{$word}{$trailing} += $prior->{$word}{$trailing} * $prior_weight;
+				}
+			}
+
+			#For this word add in all the trailing words from the prior normalised
+			foreach my $trailing (@trailing_prior) {
+				$dictionary->{$word}{$trailing} = $prior->{$word}{$trailing} * $prior_weight;
+			}
+		}
+	}
+	#Merge words not already present in the new model no need to affect the probability
+	foreach my $word (@words_prior) {
+		$dictionary->{$word} = $prior->{$word};
+	}
+	#Update the words array to show changes
+	@words = keys %$dictionary;
+	print STDERR "Number of words after merge = ".scalar @words."\n" if $debug;
+}
+
+#Do a check on all trailing probability distributions if we want to debug.
+if ($debug) {
+	print STDERR "Words where the trailing probability does not add up to one:\n";
+	foreach my $word (@words) {
+		my $total_prob = 0.0;
+		$total_prob += $_ for values %{$dictionary->{$word}};
+		print STDERR "\t$word = $total_prob\n" if $total_prob != 1.0;
+	}
+}
+
+#Output the current model if we were requested to
+if ($output_model) {
+	storemc $dictionary, $output_model;
+}
+
+#Print out a graphviz file for the model
+if ($graphviz) {
+	graphviz($dictionary, loadthes(\*DATA, $dictionary));
+	exit;
+}
+
+#Don't generate from the model if we were told to skip this.
+unless ($dont_generate) {
+
+#Use a random start word from the text or that specified from the command line
+$current_word = ($start_word)?$start_word:$words[rand int $#words];
+
+#Load in the thesaurus entries for the model
+%synonyms = %{loadthes(\*DATA, $dictionary)};
+#%synonyms = %{loadthes('posthesemot.dat', $dictionary)};
+
+#Pump out some words based on probability
+for (1..$length) {
+
+	chop $output if $current_word =~ m/[\.:;,?!]/ and $punct;
+
+	#Perform the required replacements if any
+	if (exists $replace{$current_word}) {
+		$output .= outputcolor('yellow');
+		$output .= "[$current_word => " if ($verbose);
+		$output .= $replace{$current_word};
+		$output .= "]" if $verbose;
+		$output .= resetcolor();
+	}
+	#With a probability of $thesprob print a mutation of the current word from the thesaurus
+	elsif (exists $synonyms{$current_word} and defined $synonyms{$current_word}[0] and $synonyms{$current_word}[0] =~ m/[$partsos]+/ and rand() < $thesprob) {
+		if ($emotion) {
+			emomut $current_word, \%synonyms;
+		} else {
+			randmut $current_word, \%synonyms;
+		}
+	}
+	#Otherwise just print the vanilla word from the model
+	else {
+		$output .= $current_word;
+	}
+
+	$output .= ' ' unless $current_word eq $/;
+
+	my $prob = rand;
+	foreach my $word (keys %{$dictionary->{$current_word}}) {
+		$prob -= $dictionary->{$current_word}{$word};
+		if ( $prob <= 0.0 ) {
+			$current_word = $word;
+			last;
+		}
+	}
+}
+
+print $output;
+print "\n";
+}
+
+__DATA__
