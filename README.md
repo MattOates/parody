@@ -1,7 +1,22 @@
 INSTALL
 =======
 
-You just need to add the thesaurus data onto the end of the parody perl script.
+The parody command is written as a Perl script and has several dependencies. At some point
+I will release a dependency free (but feature reduced) version of the source.
+
+You'll need to install several CPAN modules:
+Getopt::Long, Pod::Usage, Term::ANSIColor, LWP::Simple, Data::Serializer::Data::Dumper
+
+You can get all of the above with the following, using cpanm:
+
+    $ curl -L http://cpanmin.us | perl - --sudo -i Getopt::Long -i Pod::Usage -i Term::ANSIColor -i LWP::Simple -i Data::Serializer::Data::Dumper
+
+or if you only have wget and not curl:
+
+    $ wget -O - http://cpanmin.us | perl - --sudo -i Getopt::Long -i Pod::Usage -i Term::ANSIColor -i LWP::Simple -i Data::Serializer::Data::Dumper
+
+Once you have the dependencies installed, you just need to add the thesaurus data onto the
+end of the parody Perl script, and drop it into your PATH.
 
 	$ git clone git://github.com/MattOates/parody.git
 	$ cd parody
