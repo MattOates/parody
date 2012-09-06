@@ -18,8 +18,8 @@ or if you only have wget and not curl:
 Once you have the dependencies installed, you just need to add the thesaurus data onto the
 end of the parody Perl script, and drop it into your PATH.
 
-	$ git clone git://github.com/MattOates/parody.git
-	$ cd parody
+    $ git clone git://github.com/MattOates/parody.git
+    $ cd parody
     $ cat parody posthes.dat > ~/bin/parody
     $ chmod a+x ~/bin/parody
 
@@ -31,6 +31,16 @@ The perl script should come with its own usage and help built-in, try:
     $ parody --help
 
 Failing this there is a precompiled man page [man.html](parody/blob/master/man.html) in the source.
+
+TRY ONLINE
+==========
+
+If you dont want to go through the effort of installing everything you can try this parody script online at:
+
+http://mattoates.co.uk/work/parody.php
+
+This has the advantage of including the emotional thesaurus if you wish to see what sorts of results you 
+can acheieve with access to these data.
 
 THESAURUS DATA
 ==============
